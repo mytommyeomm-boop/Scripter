@@ -1,16 +1,16 @@
 --[[
     ╔══════════════════════════════════════════════════════════════╗
-    ║  🎨 CLAY-FPS v5.5 — CLAY & NETWORK ULTIMATE                  ║
+    ║  🎨 CLAY-FPS v5.6 — CLAY FIXED EDITION                       ║
     ║                                                              ║
-    ║  - เพิ่มระบบภาพดินน้ำมัน (Advanced Clay Look)                 ║
-    ║  - เพิ่มระบบลด Ping และเพิ่มประสิทธิภาพเน็ต (Network Boost)     ║
-    ║  - แก้ไขบั๊ก FPS ตกจากระบบบอล (จำกัด 3 ลูก)                    ║
-    ║  - รองรับ Delta Executor 100% (ไม่มี Nil Value Error)        ║
+    ║  - แก้บั๊กคิวพัง ทำให้ภาพดินน้ำมันไม่ทำงาน                     ║
+    ║  - แยกการป้องกัน: ไม่ลบแมพ แต่ยอมให้เปลี่ยนเป็นดินน้ำมัน        ║
+    ║  - ปรับความเร็วในการเปลี่ยนสีให้เห็นผลไวขึ้น                   ║
+    ║  - รองรับ Delta 100% (ไม่มี Nil Value Error)                 ║
     ╚══════════════════════════════════════════════════════════════╝
 ]]
 
 -- ============================================================
--- 🛡️ DELTA COMPATIBILITY LAYER (แก้ Error nil value)
+-- 🛡️ DELTA COMPATIBILITY LAYER
 -- ============================================================
 local GENV
 pcall(function()
@@ -32,7 +32,6 @@ local Players      = game:GetService("Players")
 local Lighting     = game:GetService("Lighting")
 local Workspace    = game:GetService("Workspace")
 local RunService   = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local Stats        = game:GetService("Stats")
 local LP           = Players.LocalPlayer
 
@@ -40,29 +39,30 @@ local LP           = Players.LocalPlayer
 -- ⚙️ CONFIG
 -- ============================================================
 local CONFIG = {
-    -- 🛡️ ความปลอดภัย
+    -- 🛡️ ความปลอดภัย (วัตถุในนี้จะ "ไม่ถูกทำลาย" แต่ยังเปลี่ยนเป็นดินน้ำมันได้)
     ProtectedPaths = {
         "Workspace.map", "Workspace.leaderboard", "Workspace.characters",
         "Workspace.gks", "Workspace.overtime",
     },
     ProtectLocalCharacter = true,
     
-    -- 🎨 ระบบภาพดินน้ำมัน (Clay Look)
+    -- 🎨 ระบบภาพดินน้ำมัน
     ClayLook = true, 
+    ClayMapToo = true,         -- ✅ เปิดให้พื้นแมพเป็นดินน้ำมันด้วย
     ClayMuteColors = true,     -- ปรับสีให้หม่นลง เหมือนดินน้ำมันจริงๆ
     RemoveTextures = true, 
     RemoveEffects = true, 
     RemoveLights = true,
     RemoveFog = true,
     
-    -- 🌐 ระบบเพิ่มประสิทธิภาพเน็ต (Network Optimizer)
+    -- 🌐 ระบบเพิ่มประสิทธิภาพเน็ต
     NetworkOptimize = true,
-    OutgoingRate = 35,         -- ลดอัตราการส่งข้อมูลลง (ลด Ping)
-    StreamingRadius = 512,     -- จำกัดการโหลดพื้นผิว (ลดอาการหน่วง)
+    OutgoingRate = 35,
+    StreamingRadius = 512,
     
     -- ⚽ ระบบบอล
     BallSmoothing = true, 
-    MaxBalls = 3,              -- จำกัดบอลสูงสุด 3 ลูก (แก้ FPS ตก)
+    MaxBalls = 3,              
     BallHighlight = true,
     
     -- ⚡ ประสิทธิภาพ
@@ -78,7 +78,6 @@ local CLAY = {
     Connections = {}, Threads = {},
     Processed = setmetatable({}, {__mode = "k"}),
     Running = true,
-    FrozenChars = setmetatable({}, {__mode = "k"}),
     OriginalMaterial = setmetatable({}, {__mode = "k"}),
     BallData = {},
     MaterialAppliedCount = 0,
@@ -99,71 +98,7 @@ function CLAY:Cleanup()
     self.BallData = {}
     self.Connections, self.Threads = {}, {}
     self.Processed = setmetatable({}, {__mode = "k"})
-    self.FrozenChars = setmetatable({}, {__mode = "k"})
     self.OriginalMaterial = setmetatable({}, {__mode = "k"})
-end
-
--- ============================================================
--- 🌐 NETWORK OPTIMIZER (ระบบเน็ต)
--- ============================================================
-local function applyNetworkOptimizer()
-    if not CONFIG.NetworkOptimize then return end
-    
-    -- 1. ปรับค่าผ่าน Settings (ลดการหน่วง)
-    local ok, s = pcall(function() return settings() end)
-    if ok and s then
-        pcall(function() s.Network.IncomingReplicationLag = 0 end) -- ลบดีเลย์เทียม
-        pcall(function() s.Network.PreferredOutgoingReplicationRate = CONFIG.OutgoingRate end)
-    end
-    
-    -- 2. ปรับ Streaming (ลดภาระการโหลดฉาก)
-    if Workspace.StreamingEnabled then
-        pcall(function() Workspace.StreamingTargetRadius = CONFIG.StreamingRadius end)
-        pcall(function() Workspace.StreamingPauseMode = Enum.StreamingPauseMode.ClientPhysicsPause end)
-    end
-    
-    -- 3. ปรับ FFlags (ลด Packet และเพิ่มความเร็วการส่งข้อมูล)
-    if type(setfflag) == "function" then
-        pcall(function()
-            setfflag("DFIntS2PhysicsSenderRate", "5")          -- ลดการส่ง Physics
-            setfflag("DFIntS2PhysicsReceiverRate", "5")        -- ลดการรับ Physics
-            setfflag("DFIntMaxDataPacketsPerSecond", "30")     -- จำกัด Packet ต่อวินาที
-            setfflag("FFlagOptimizeNetworkSendData", "true")   -- บีบอัดข้อมูล
-        end)
-    end
-end
-
--- ============================================================
--- 🎨 CLAY VISUAL SYSTEM (ระบบภาพดินน้ำมัน)
--- ============================================================
-local function applyClayLighting()
-    pcall(function()
-        Lighting.GlobalShadows = false
-        Lighting.Brightness = 2.5
-        Lighting.Ambient = Color3.fromRGB(100, 98, 102) -- สีเทาอมน้ำตาล
-        Lighting.OutdoorAmbient = Color3.fromRGB(120, 118, 122)
-        Lighting.EnvironmentDiffuseScale = 0
-        Lighting.EnvironmentSpecularScale = 0
-        Lighting.FogStart = 0
-        Lighting.FogEnd = 100000
-        Lighting.FogColor = Color3.fromRGB(255, 255, 255)
-    end)
-    
-    -- ลบหมอกและเอฟเฟกต์แสง
-    for _, obj in ipairs(Lighting:GetChildren()) do
-        if obj:IsA("PostEffect") or obj:IsA("Atmosphere") or obj:IsA("Clouds") then 
-            pcall(function() obj:Destroy() end) 
-        end
-    end
-    
-    -- เพิ่ม Filter ดินน้ำมัน
-    local cc = Instance.new("ColorCorrectionEffect")
-    cc.Name = "CLAY_GRADE"
-    cc.Saturation = CONFIG.ClayMuteColors and -0.4 or -0.1 -- ลดความสดของสี
-    cc.Contrast = 0.15
-    cc.Brightness = 0.05
-    cc.TintColor = Color3.fromRGB(255, 248, 245) -- โทนอุ่น
-    cc.Parent = Lighting
 end
 
 -- ============================================================
@@ -204,7 +139,139 @@ local function isLocalChar(inst)
 end
 
 -- ============================================================
--- ⚽ BALL SMOOTHER (แก้ปัญหา FPS ตก)
+-- 🌐 NETWORK OPTIMIZER
+-- ============================================================
+local function applyNetworkOptimizer()
+    if not CONFIG.NetworkOptimize then return end
+    
+    local ok, s = pcall(function() return settings() end)
+    if ok and s then
+        pcall(function() s.Network.IncomingReplicationLag = 0 end)
+        pcall(function() s.Network.PreferredOutgoingReplicationRate = CONFIG.OutgoingRate end)
+    end
+    
+    if Workspace.StreamingEnabled then
+        pcall(function() Workspace.StreamingTargetRadius = CONFIG.StreamingRadius end)
+        pcall(function() Workspace.StreamingPauseMode = Enum.StreamingPauseMode.ClientPhysicsPause end)
+    end
+    
+    if type(setfflag) == "function" then
+        pcall(function()
+            setfflag("DFIntS2PhysicsSenderRate", "5")
+            setfflag("DFIntS2PhysicsReceiverRate", "5")
+            setfflag("DFIntMaxDataPacketsPerSecond", "30")
+            setfflag("FFlagOptimizeNetworkSendData", "true")
+        end)
+    end
+end
+
+-- ============================================================
+-- 🎨 CLAY VISUAL SYSTEM (ระบบภาพดินน้ำมัน)
+-- ============================================================
+local function applyClayLighting()
+    pcall(function()
+        Lighting.GlobalShadows = false
+        Lighting.Brightness = 2.5
+        Lighting.Ambient = Color3.fromRGB(100, 98, 102)
+        Lighting.OutdoorAmbient = Color3.fromRGB(120, 118, 122)
+        Lighting.EnvironmentDiffuseScale = 0
+        Lighting.EnvironmentSpecularScale = 0
+        Lighting.FogStart = 0
+        Lighting.FogEnd = 100000
+        Lighting.FogColor = Color3.fromRGB(255, 255, 255)
+    end)
+    
+    for _, obj in ipairs(Lighting:GetChildren()) do
+        if obj:IsA("PostEffect") or obj:IsA("Atmosphere") or obj:IsA("Clouds") then 
+            pcall(function() obj:Destroy() end) 
+        end
+    end
+    
+    local cc = Lighting:FindFirstChild("CLAY_GRADE")
+    if not cc then
+        cc = Instance.new("ColorCorrectionEffect")
+        cc.Name = "CLAY_GRADE"
+        cc.Parent = Lighting
+    end
+    cc.Saturation = CONFIG.ClayMuteColors and -0.4 or -0.1 
+    cc.Contrast = 0.15
+    cc.Brightness = 0.05
+    cc.TintColor = Color3.fromRGB(255, 248, 245)
+end
+
+-- ============================================================
+-- 🧱 TOUCH & MATERIAL BATCH (ระบบเปลี่ยนดินน้ำมัน - แก้บั๊กคิวพัง)
+-- ============================================================
+local matQueue = {}
+
+local function touch(inst)
+    if not inst or not inst.Parent or inst.Name:sub(1,5) == "CLAY_" or CLAY.Processed[inst] then return end
+    CLAY.Processed[inst] = true
+    
+    if isLocalChar(inst) then return end
+    
+    local isProt = isProtected(inst)
+
+    -- 1. จัดการเอฟเฟกต์ (ถ้าติด Protected ห้ามลบ แต่ถ้าไม่ติดให้ลบ)
+    if CONFIG.RemoveEffects and (inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") or inst:IsA("Smoke") or inst:IsA("Fire")) then
+        if not isProt then pcall(function() inst:Destroy() end) end
+        return
+    end
+    
+    -- 2. จัดการแสง
+    if CONFIG.RemoveLights and inst:IsA("Light") then 
+        if not isProt then pcall(function() inst:Destroy() end) end
+        return 
+    end
+    
+    -- 3. จัดการเสียง
+    if inst:IsA("Sound") then pcall(function() inst.Volume = 0 end); return end
+    
+    -- 4. จัดการพื้นผิว (ถ้าติด Protected ห้ามลบ)
+    if CONFIG.RemoveTextures and (inst:IsA("Decal") or inst:IsA("Texture") or inst:IsA("SurfaceAppearance")) then 
+        if not isProt then pcall(function() inst:Destroy() end) end
+        return 
+    end
+    
+    -- 5. เปลี่ยนเป็นดินน้ำมัน (ทำงานทุกที่ ถ้าเปิด ClayMapToo)
+    if CONFIG.ClayLook and inst:IsA("BasePart") then
+        if isProt and not CONFIG.ClayMapToo then return end
+        table.insert(matQueue, inst) -- ใช้ table.insert เพื่อความถูกต้อง
+    end
+end
+
+local function drainMaterials()
+    if #matQueue == 0 then return end
+    -- ✅ เพิ่มความเร็วเป็น 30 ชิ้นต่อเฟรม (Material เปลี่ยนเร็วและไม่กระตุก)
+    local n = math.min(#matQueue, 30) 
+    
+    for _ = 1, n do
+        local p = table.remove(matQueue, 1) -- ✅ ใช้ table.remove แก้บั๊กคิวพัง
+        if p and p.Parent then
+            pcall(function()
+                if not CLAY.OriginalMaterial[p] then
+                    CLAY.OriginalMaterial[p] = { Material = p.Material, Color = p.Color }
+                end
+                
+                p.Material = Enum.Material.SmoothPlastic
+                p.Reflectance = 0
+                
+                -- ปรับสีให้หม่นลง (Mute Colors)
+                if CONFIG.ClayMuteColors and p.Color then
+                    local c = p.Color
+                    local gray = c.R * 0.299 + c.G * 0.587 + c.B * 0.114
+                    p.Color = Color3.new(c.R * 0.6 + gray * 0.4, c.G * 0.6 + gray * 0.4, c.B * 0.6 + gray * 0.4)
+                end
+                
+                if CONFIG.RemoveTextures and p:IsA("MeshPart") then p.TextureID = "" end
+                CLAY.MaterialAppliedCount = CLAY.MaterialAppliedCount + 1
+            end)
+        end
+    end
+end
+
+-- ============================================================
+-- ⚽ BALL SMOOTHER
 -- ============================================================
 local function isBall(name)
     name = name:lower()
@@ -213,7 +280,6 @@ end
 
 local function initBall(realBall)
     if CLAY.BallData[realBall] or not CONFIG.BallSmoothing then return end
-    
     local count = 0
     for _ in pairs(CLAY.BallData) do count = count + 1 end
     if count >= CONFIG.MaxBalls then return end
@@ -289,75 +355,7 @@ local function renderBalls()
 end
 
 -- ============================================================
--- 👤 CHARACTER & SOUND
--- ============================================================
-local function optimizeCharacter(char)
-    if not char or char == LP.Character then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then pcall(function() hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end) end
-end
-
--- ============================================================
--- 🧱 MATERIAL BATCH & TOUCH (ระบบเปลี่ยนเป็นดินน้ำมัน)
--- ============================================================
-local matQueue, matSize = {}, 0
-
-local function touch(inst)
-    if not inst or not inst.Parent or inst.Name:sub(1,5) == "CLAY_" or CLAY.Processed[inst] then return end
-    CLAY.Processed[inst] = true
-    
-    if isProtected(inst) or isLocalChar(inst) then return end
-
-    if CONFIG.RemoveEffects and (inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") or inst:IsA("Smoke") or inst:IsA("Fire")) then
-        pcall(function() inst:Destroy() end); return
-    end
-    if CONFIG.RemoveLights and inst:IsA("Light") then pcall(function() inst:Destroy() end); return end
-    if inst:IsA("Sound") then pcall(function() inst.Volume = 0 end); return end
-    if CONFIG.RemoveTextures and (inst:IsA("Decal") or inst:IsA("Texture") or inst:IsA("SurfaceAppearance")) then 
-        pcall(function() inst:Destroy() end); return 
-    end
-    
-    if CONFIG.ClayLook and inst:IsA("BasePart") then
-        if isBall(inst.Name) then initBall(inst) 
-        else
-            matSize = matSize + 1
-            matQueue[matSize] = inst
-        end
-    end
-end
-
-local function drainMaterials()
-    if matSize == 0 then return end
-    -- จำกัดการเปลี่ยน 5 ชิ้นต่อเฟรม ป้องกันเฟรมเรตตก
-    local n = math.min(matSize, 5) 
-    for i = 1, n do
-        local p = matQueue[i]
-        if p and p.Parent and not isProtected(p) then
-            pcall(function()
-                if not CLAY.OriginalMaterial[p] then
-                    CLAY.OriginalMaterial[p] = { Material = p.Material, Color = p.Color }
-                end
-                p.Material = Enum.Material.SmoothPlastic
-                p.Reflectance = 0
-                
-                -- 🌟 ระบบสีดินน้ำมัน: ถ้าเปิด MuteColors ให้สีหม่นลง
-                if CONFIG.ClayMuteColors and p.Color then
-                    local c = p.Color
-                    local gray = c.R * 0.299 + c.G * 0.587 + c.B * 0.114
-                    p.Color = Color3.new(c.R * 0.6 + gray * 0.4, c.G * 0.6 + gray * 0.4, c.B * 0.6 + gray * 0.4)
-                end
-                
-                if CONFIG.RemoveTextures and p:IsA("MeshPart") then p.TextureID = "" end
-                CLAY.MaterialAppliedCount = CLAY.MaterialAppliedCount + 1
-            end)
-        end
-    end
-    for i = 1, n do matQueue[i] = nil end
-    matSize = matSize - n
-end
-
--- ============================================================
--- 📊 HUD (แสดง FPS/Ping)
+-- 📊 HUD
 -- ============================================================
 local HUD = {}
 local pingStat = Stats.Network.ServerStatsItem["Data Ping"]
@@ -379,18 +377,15 @@ end
 -- ============================================================
 -- 🚀 MAIN EXECUTION
 -- ============================================================
--- 1. ตั้งค่า FPS และกราฟิก
 pcall(function() UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1 end)
 pcall(setfpscap, CONFIG.MaxFPS)
 
--- 2. เริ่มระบบเน็ตและภาพดินน้ำมัน
 applyNetworkOptimizer()
 applyClayLighting()
 
--- 3. เริ่ม HUD
 if CONFIG.ShowHUD then pcall(makeHUD) end
 
--- 4. สแกนและเปลี่ยนวัตถุเป็นดินน้ำมัน
+-- สแกนและเปลี่ยนวัตถุเป็นดินน้ำมัน
 CLAY:TrackThread(task.spawn(function()
     task.wait(0.5)
     local stack, idx = { Workspace }, 1
@@ -398,7 +393,10 @@ CLAY:TrackThread(task.spawn(function()
         local cur = stack[idx]; stack[idx] = nil; idx = idx + 1
         if cur and cur.Parent then
             touch(cur)
-            if cur:IsA("Model") and cur:FindFirstChildOfClass("Humanoid") then optimizeCharacter(cur) end
+            if cur:IsA("Model") and cur:FindFirstChildOfClass("Humanoid") and cur ~= LP.Character then 
+                local hum = cur:FindFirstChildOfClass("Humanoid")
+                if hum then pcall(function() hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end) end
+            end
             for _, ch in ipairs(cur:GetChildren()) do stack[#stack+1] = ch end
         end
         if idx % 100 == 0 then task.wait() end
@@ -407,7 +405,7 @@ end))
 
 CLAY:TrackConn(Workspace.DescendantAdded:Connect(touch))
 
--- 5. ลูปอัปเดตระบบหลังบ้าน
+-- ลูปอัปเดตระบบหลังบ้าน
 CLAY:TrackThread(task.spawn(function()
     while CLAY.Running do
         drainMaterials()
@@ -416,16 +414,16 @@ CLAY:TrackThread(task.spawn(function()
             local ping = 0; pcall(function() ping = math.floor(pingStat:GetValue()) end)
             local ballCount = 0; for _ in pairs(CLAY.BallData) do ballCount = ballCount + 1 end
             
-            -- แสดงผลแบบมีสี (FPS สีเขียวถ้าดี, แดงถ้าตก)
             local fpsColor = fps >= 50 and "#78FF8C" or (fps >= 30 and "#FFE678" or "#FF6E6E")
-            HUD.line.Text = string.format("FPS <font color=\"%s\"><b>%d</b></font> | Ping <b>%dms</b> | Ball: %d", fpsColor, fps, ping, ballCount)
+            -- เพิ่มตัวเลข Clay เพื่อให้รู้ว่าทำงานกี่ชิ้นแล้ว
+            HUD.line.Text = string.format("FPS <font color=\"%s\"><b>%d</b></font> | Ping <b>%dms</b> | Ball: %d | Clay: %d", fpsColor, fps, ping, ballCount, CLAY.MaterialAppliedCount)
         else
             task.wait()
         end
     end
 end))
 
--- 6. ลูปอัปเดตบอล (ลื่นไหล)
+-- ลูปอัปเดตบอล
 CLAY:TrackThread(task.spawn(function()
     while CLAY.Running do
         RunService.RenderStepped:Wait()
@@ -434,4 +432,4 @@ CLAY:TrackThread(task.spawn(function()
     end
 end))
 
-print("[CLAY-FPS v5.5 ULTIMATE] ✅ โหลดสำเร็จ! ระบบเน็ตและดินน้ำมันทำงานแล้ว")
+print("[CLAY-FPS v5.6] ✅ โหลดสำเร็จ! ระบบภาพดินน้ำมันทำงานแล้ว")
