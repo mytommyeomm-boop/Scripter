@@ -1,16 +1,17 @@
 --[[
     ╔══════════════════════════════════════════════════════════════╗
-    ║  🎨 CLAY-FPS v5.6 — CLAY FIXED EDITION                       ║
+    ║  🎨 CLAY-FPS v5.9 — ENDURANCE EDITION                        ║
     ║                                                              ║
-    ║  - แก้บั๊กคิวพัง ทำให้ภาพดินน้ำมันไม่ทำงาน                     ║
-    ║  - แยกการป้องกัน: ไม่ลบแมพ แต่ยอมให้เปลี่ยนเป็นดินน้ำมัน        ║
-    ║  - ปรับความเร็วในการเปลี่ยนสีให้เห็นผลไวขึ้น                   ║
-    ║  - รองรับ Delta 100% (ไม่มี Nil Value Error)                 ║
+    ║  - 🧹 ระบบล้างโคมไฟ/ขยะในฉาก (Light & Clutter Cleaner)          ║
+    ║  - 🧠 ระบบเล่นนานๆ ไม่แล็ค (Memory Leak & GC Manager)          ║
+    ║  - 🌐 ระบบเพิ่มประสิทธิภาพ WiFi/Net                             ║
+    ║  - 🌟 บังคับเปลี่ยนทุกอย่างเป็นดินน้ำมัน 100%                     ║
+    ║  - ⚽ บอลลื่น / 🛡️ แก้บั๊ก Delta 100%                           ║
     ╚══════════════════════════════════════════════════════════════╝
 ]]
 
 -- ============================================================
--- 🛡️ DELTA COMPATIBILITY LAYER
+-- 🛡️ DELTA COMPATIBILITY LAYER (แก้ Error nil value)
 -- ============================================================
 local GENV
 pcall(function()
@@ -39,35 +40,32 @@ local LP           = Players.LocalPlayer
 -- ⚙️ CONFIG
 -- ============================================================
 local CONFIG = {
-    -- 🛡️ ความปลอดภัย (วัตถุในนี้จะ "ไม่ถูกทำลาย" แต่ยังเปลี่ยนเป็นดินน้ำมันได้)
-    ProtectedPaths = {
-        "Workspace.map", "Workspace.leaderboard", "Workspace.characters",
-        "Workspace.gks", "Workspace.overtime",
-    },
-    ProtectLocalCharacter = true,
-    
-    -- 🎨 ระบบภาพดินน้ำมัน
-    ClayLook = true, 
-    ClayMapToo = true,         -- ✅ เปิดให้พื้นแมพเป็นดินน้ำมันด้วย
-    ClayMuteColors = true,     -- ปรับสีให้หม่นลง เหมือนดินน้ำมันจริงๆ
-    RemoveTextures = true, 
-    RemoveEffects = true, 
-    RemoveLights = true,
-    RemoveFog = true,
-    
-    -- 🌐 ระบบเพิ่มประสิทธิภาพเน็ต
+    -- 🧹 ระบบล้างโคมและขยะ
+    LightCleanup = true,        -- ลบโคมไฟ/แสงทั้งหมด
+    ClutterCleanup = true,      -- ลบ Effect ขยะที่ค้างในฉาก
+    ClutterInterval = 30,       -- ล้างขยะทุกๆ กี่วินาที (30 วิ)
+
+    -- 🧠 ระบบเล่นนานๆ ไม่แล็ค (Memory)
+    MemoryManager = true,
+    MemoryCleanupInterval = 60, -- ล้าง Memory ทุกๆ 60 วินาที
+    MaxMemoryMB = 700,          -- ถ้า RAM เกิน 700MB จะบังคับ GC ทันที
+
+    -- 🌐 ระบบ WiFi / Network
     NetworkOptimize = true,
-    OutgoingRate = 35,
+    OutgoingRate = 30,
     StreamingRadius = 512,
+    OptimizePhysicsNet = true,
+
+    -- 🎨 ระบบดินน้ำมัน 100%
+    ForceClayEverything = true, 
+    MuteColors = true,          
     
     -- ⚽ ระบบบอล
     BallSmoothing = true, 
-    MaxBalls = 3,              
-    BallHighlight = true,
+    MaxBalls = 3,
     
     -- ⚡ ประสิทธิภาพ
     MaxFPS = 60,
-    QualityLevel = 1,
     ShowHUD = true,
 }
 
@@ -102,71 +100,108 @@ function CLAY:Cleanup()
 end
 
 -- ============================================================
--- 🛡️ PROTECTION SYSTEM
--- ============================================================
-local protectedRoots = {}
-for _, path in ipairs(CONFIG.ProtectedPaths) do
-    local ok, obj = pcall(function()
-        local parts = {}
-        for seg in path:gmatch("[^%.]+") do parts[#parts+1] = seg end
-        local cur = game
-        for _, p in ipairs(parts) do cur = cur[p] end
-        return cur
-    end)
-    if ok and obj then protectedRoots[obj] = true end
-end
-
-local function isProtected(inst)
-    if not inst then return false end
-    local cur = inst
-    while cur do
-        if protectedRoots[cur] then return true end
-        cur = cur.Parent
-    end
-    return false
-end
-
-local function isLocalChar(inst)
-    if not CONFIG.ProtectLocalCharacter then return false end
-    local char = LP.Character
-    if not char then return false end
-    local cur = inst
-    while cur do
-        if cur == char then return true end
-        cur = cur.Parent
-    end
-    return false
-end
-
--- ============================================================
--- 🌐 NETWORK OPTIMIZER
+-- 🌐 ADVANCED NETWORK OPTIMIZER
 -- ============================================================
 local function applyNetworkOptimizer()
     if not CONFIG.NetworkOptimize then return end
-    
     local ok, s = pcall(function() return settings() end)
     if ok and s then
         pcall(function() s.Network.IncomingReplicationLag = 0 end)
         pcall(function() s.Network.PreferredOutgoingReplicationRate = CONFIG.OutgoingRate end)
     end
-    
     if Workspace.StreamingEnabled then
         pcall(function() Workspace.StreamingTargetRadius = CONFIG.StreamingRadius end)
         pcall(function() Workspace.StreamingPauseMode = Enum.StreamingPauseMode.ClientPhysicsPause end)
     end
-    
     if type(setfflag) == "function" then
         pcall(function()
-            setfflag("DFIntS2PhysicsSenderRate", "5")
-            setfflag("DFIntS2PhysicsReceiverRate", "5")
-            setfflag("DFIntMaxDataPacketsPerSecond", "30")
+            if CONFIG.OptimizePhysicsNet then
+                setfflag("DFIntS2PhysicsSenderRate", "5")
+                setfflag("DFIntS2PhysicsReceiverRate", "5")
+            end
+            setfflag("DFIntMaxDataPacketsPerSecond", "25") 
             setfflag("FFlagOptimizeNetworkSendData", "true")
         end)
     end
 end
 
 -- ============================================================
--- 🎨 CLAY VISUAL SYSTEM (ระบบภาพดินน้ำมัน)
+-- 🧹 LIGHT & CLUTTER CLEANER (ระบบล้างโคมและขยะ)
+-- ============================================================
+local function clearLightsAndClutter()
+    if CONFIG.LightCleanup then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Light") then
+                pcall(function() obj:Destroy() end)
+            end
+        end
+    end
+    
+    if CONFIG.ClutterCleanup then
+        -- ลบ Effect ขยะที่ไม่ได้อยู่ใน Protected Path
+        local protectedNames = {["Workspace"]=true, ["map"]=true, ["leaderboard"]=true, ["characters"]=true, ["gks"]=true}
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if (obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire")) then
+                -- เช็คว่าอยู่ในแมพหลักหรือไม่ (ถ้าไม่ใช่ ให้ลบทิ้ง)
+                local parent = obj.Parent
+                local isMap = false
+                while parent do
+                    if protectedNames[parent.Name] then isMap = true; break end
+                    parent = parent.Parent
+                end
+                if not isMap then
+                    pcall(function() obj:Destroy() end)
+                end
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- 🧠 MEMORY MANAGER (ระบบเล่นนานๆ ไม่แล็ค)
+-- ============================================================
+local function runMemoryCleanup()
+    if not CONFIG.MemoryManager then return end
+    
+    -- 1. ล้าง Reference ของวัตถุที่โดนทำลายไปแล้วใน Table
+    local cleaned = 0
+    for k in pairs(CLAY.Processed) do
+        if not k or not k.Parent then
+            CLAY.Processed[k] = nil
+            cleaned = cleaned + 1
+        end
+    end
+    for k in pairs(CLAY.OriginalMaterial) do
+        if not k or not k.Parent then
+            CLAY.OriginalMaterial[k] = nil
+            cleaned = cleaned + 1
+        end
+    end
+    
+    -- 2. ล้างบอลที่หลุดหาย
+    for realBall, d in pairs(CLAY.BallData) do
+        if not realBall.Parent or not d.proxy.Parent then
+            if d.proxy then d.proxy:Destroy() end
+            pcall(function() realBall.LocalTransparencyModifier = 0 end)
+            CLAY.BallData[realBall] = nil
+        end
+    end
+
+    -- 3. บังคับ GC (Garbage Collection)
+    local memUsage = math.floor(collectgarbage("count") / 1024) -- MB
+    
+    -- ถ้า RAM เกินลิมิต หรือถึงรอบล้าง ให้บังคับ GC
+    if memUsage > CONFIG.MaxMemoryMB then
+        collectgarbage("collect")
+    else
+        collectgarbage("step") -- ล้างแบบเบาๆ ไม่ให้กระตุก
+    end
+    
+    -- print("[CLAY-FPS] 🧹 เคลียร์ Memory: " .. cleaned .. " รายการ | RAM: " .. memUsage .. " MB")
+end
+
+-- ============================================================
+-- 🎨 CLAY VISUAL SYSTEM
 -- ============================================================
 local function applyClayLighting()
     pcall(function()
@@ -178,7 +213,6 @@ local function applyClayLighting()
         Lighting.EnvironmentSpecularScale = 0
         Lighting.FogStart = 0
         Lighting.FogEnd = 100000
-        Lighting.FogColor = Color3.fromRGB(255, 255, 255)
     end)
     
     for _, obj in ipairs(Lighting:GetChildren()) do
@@ -193,60 +227,49 @@ local function applyClayLighting()
         cc.Name = "CLAY_GRADE"
         cc.Parent = Lighting
     end
-    cc.Saturation = CONFIG.ClayMuteColors and -0.4 or -0.1 
+    cc.Saturation = CONFIG.MuteColors and -0.5 or -0.1 
     cc.Contrast = 0.15
     cc.Brightness = 0.05
     cc.TintColor = Color3.fromRGB(255, 248, 245)
 end
 
 -- ============================================================
--- 🧱 TOUCH & MATERIAL BATCH (ระบบเปลี่ยนดินน้ำมัน - แก้บั๊กคิวพัง)
+-- 🧱 MATERIAL BATCH & TOUCH
 -- ============================================================
 local matQueue = {}
 
 local function touch(inst)
     if not inst or not inst.Parent or inst.Name:sub(1,5) == "CLAY_" or CLAY.Processed[inst] then return end
     CLAY.Processed[inst] = true
-    
-    if isLocalChar(inst) then return end
-    
-    local isProt = isProtected(inst)
 
-    -- 1. จัดการเอฟเฟกต์ (ถ้าติด Protected ห้ามลบ แต่ถ้าไม่ติดให้ลบ)
-    if CONFIG.RemoveEffects and (inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") or inst:IsA("Smoke") or inst:IsA("Fire")) then
-        if not isProt then pcall(function() inst:Destroy() end) end
+    if inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") or inst:IsA("Smoke") or inst:IsA("Fire") or inst:IsA("Light") then
+        pcall(function() inst:Destroy() end)
         return
     end
-    
-    -- 2. จัดการแสง
-    if CONFIG.RemoveLights and inst:IsA("Light") then 
-        if not isProt then pcall(function() inst:Destroy() end) end
-        return 
+    if inst:IsA("Sound") then
+        pcall(function() inst.Volume = 0 end)
+        return
     end
-    
-    -- 3. จัดการเสียง
-    if inst:IsA("Sound") then pcall(function() inst.Volume = 0 end); return end
-    
-    -- 4. จัดการพื้นผิว (ถ้าติด Protected ห้ามลบ)
-    if CONFIG.RemoveTextures and (inst:IsA("Decal") or inst:IsA("Texture") or inst:IsA("SurfaceAppearance")) then 
-        if not isProt then pcall(function() inst:Destroy() end) end
-        return 
+    if inst:IsA("Decal") or inst:IsA("Texture") or inst:IsA("SurfaceAppearance") then
+        pcall(function() inst:Destroy() end)
+        return
     end
-    
-    -- 5. เปลี่ยนเป็นดินน้ำมัน (ทำงานทุกที่ ถ้าเปิด ClayMapToo)
-    if CONFIG.ClayLook and inst:IsA("BasePart") then
-        if isProt and not CONFIG.ClayMapToo then return end
-        table.insert(matQueue, inst) -- ใช้ table.insert เพื่อความถูกต้อง
+    if inst:IsA("SpecialMesh") then
+        pcall(function() inst.TextureId = "" end)
+        return
+    end
+
+    if CONFIG.ForceClayEverything and inst:IsA("BasePart") then
+        table.insert(matQueue, inst)
     end
 end
 
 local function drainMaterials()
     if #matQueue == 0 then return end
-    -- ✅ เพิ่มความเร็วเป็น 30 ชิ้นต่อเฟรม (Material เปลี่ยนเร็วและไม่กระตุก)
-    local n = math.min(#matQueue, 30) 
+    local n = math.min(#matQueue, 40) 
     
     for _ = 1, n do
-        local p = table.remove(matQueue, 1) -- ✅ ใช้ table.remove แก้บั๊กคิวพัง
+        local p = table.remove(matQueue, 1)
         if p and p.Parent then
             pcall(function()
                 if not CLAY.OriginalMaterial[p] then
@@ -255,15 +278,19 @@ local function drainMaterials()
                 
                 p.Material = Enum.Material.SmoothPlastic
                 p.Reflectance = 0
+                p.CastShadow = false
                 
-                -- ปรับสีให้หม่นลง (Mute Colors)
-                if CONFIG.ClayMuteColors and p.Color then
-                    local c = p.Color
-                    local gray = c.R * 0.299 + c.G * 0.587 + c.B * 0.114
-                    p.Color = Color3.new(c.R * 0.6 + gray * 0.4, c.G * 0.6 + gray * 0.4, c.B * 0.6 + gray * 0.4)
+                if p:IsA("MeshPart") then 
+                    p.TextureID = "" 
+                    p.MaterialVariant = ""
                 end
                 
-                if CONFIG.RemoveTextures and p:IsA("MeshPart") then p.TextureID = "" end
+                if CONFIG.MuteColors and p.Color then
+                    local c = p.Color
+                    local gray = c.R * 0.299 + c.G * 0.587 + c.B * 0.114
+                    p.Color = Color3.new(c.R * 0.4 + gray * 0.6, c.G * 0.4 + gray * 0.6, c.B * 0.4 + gray * 0.6)
+                end
+                
                 CLAY.MaterialAppliedCount = CLAY.MaterialAppliedCount + 1
             end)
         end
@@ -293,14 +320,6 @@ local function initBall(realBall)
     proxy.Anchored = true; proxy.CastShadow = false
     proxy.CFrame = realBall.CFrame; proxy.Parent = Workspace
     realBall.LocalTransparencyModifier = 1
-
-    if CONFIG.BallHighlight then
-        local hl = Instance.new("Highlight")
-        hl.Name = "CLAY_HL"; hl.FillColor = Color3.fromRGB(255,255,80)
-        hl.FillTransparency = 0.75; hl.OutlineColor = Color3.fromRGB(255,255,80)
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.Adornee = proxy; hl.Parent = proxy
-    end
 
     CLAY.BallData[realBall] = {
         proxy = proxy, 
@@ -365,7 +384,7 @@ local function makeHUD()
     local old = pg:FindFirstChild("CLAY_HUD"); if old then old:Destroy() end
     local gui = Instance.new("ScreenGui"); gui.Name, gui.ResetOnSpawn, gui.DisplayOrder = "CLAY_HUD", false, 9999
     gui.Parent = pg
-    local f = Instance.new("Frame"); f.Size, f.Position = UDim2.new(0,220,0,46), UDim2.new(1,-228,0,8)
+    local f = Instance.new("Frame"); f.Size, f.Position = UDim2.new(0,260,0,46), UDim2.new(1,-268,0,8)
     f.BackgroundColor3, f.BackgroundTransparency = Color3.fromRGB(20,18,16), 0.35; f.BorderSizePixel = 0; f.Parent = gui
     Instance.new("UICorner", f).CornerRadius = UDim.new(0,8)
     
@@ -382,10 +401,11 @@ pcall(setfpscap, CONFIG.MaxFPS)
 
 applyNetworkOptimizer()
 applyClayLighting()
+clearLightsAndClutter() -- ล้างโคมและขยะรอบแรก
 
 if CONFIG.ShowHUD then pcall(makeHUD) end
 
--- สแกนและเปลี่ยนวัตถุเป็นดินน้ำมัน
+-- สแกนทุกอย่างในเกม
 CLAY:TrackThread(task.spawn(function()
     task.wait(0.5)
     local stack, idx = { Workspace }, 1
@@ -393,19 +413,17 @@ CLAY:TrackThread(task.spawn(function()
         local cur = stack[idx]; stack[idx] = nil; idx = idx + 1
         if cur and cur.Parent then
             touch(cur)
-            if cur:IsA("Model") and cur:FindFirstChildOfClass("Humanoid") and cur ~= LP.Character then 
-                local hum = cur:FindFirstChildOfClass("Humanoid")
-                if hum then pcall(function() hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end) end
-            end
+            if cur:IsA("BasePart") and isBall(cur.Name) then initBall(cur) end
             for _, ch in ipairs(cur:GetChildren()) do stack[#stack+1] = ch end
         end
         if idx % 100 == 0 then task.wait() end
     end
 end))
 
+-- ดักจับวัตถุใหม่
 CLAY:TrackConn(Workspace.DescendantAdded:Connect(touch))
 
--- ลูปอัปเดตระบบหลังบ้าน
+-- ลูปหลัก (อัปเดตระบบ)
 CLAY:TrackThread(task.spawn(function()
     while CLAY.Running do
         drainMaterials()
@@ -414,9 +432,10 @@ CLAY:TrackThread(task.spawn(function()
             local ping = 0; pcall(function() ping = math.floor(pingStat:GetValue()) end)
             local ballCount = 0; for _ in pairs(CLAY.BallData) do ballCount = ballCount + 1 end
             
+            local pingColor = ping < 100 and "#78FF8C" or (ping < 200 and "#FFE678" or "#FF6E6E")
             local fpsColor = fps >= 50 and "#78FF8C" or (fps >= 30 and "#FFE678" or "#FF6E6E")
-            -- เพิ่มตัวเลข Clay เพื่อให้รู้ว่าทำงานกี่ชิ้นแล้ว
-            HUD.line.Text = string.format("FPS <font color=\"%s\"><b>%d</b></font> | Ping <b>%dms</b> | Ball: %d | Clay: %d", fpsColor, fps, ping, ballCount, CLAY.MaterialAppliedCount)
+            
+            HUD.line.Text = string.format("FPS <font color=\"%s\"><b>%d</b></font> | Ping <font color=\"%s\"><b>%dms</b></font> | Clay: %d", fpsColor, fps, pingColor, ping, CLAY.MaterialAppliedCount)
         else
             task.wait()
         end
@@ -432,4 +451,18 @@ CLAY:TrackThread(task.spawn(function()
     end
 end))
 
-print("[CLAY-FPS v5.6] ✅ โหลดสำเร็จ! ระบบภาพดินน้ำมันทำงานแล้ว")
+-- 🧹 ลูปจัดการ Memory & ขยะ (ระบบเล่นนานๆ ไม่แล็ค)
+CLAY:TrackThread(task.spawn(function()
+    while CLAY.Running do
+        task.wait(CONFIG.MemoryCleanupInterval)
+        if CLAY.Running then
+            runMemoryCleanup() -- ล้าง Memory
+            
+            if CONFIG.ClutterCleanup then
+                clearLightsAndClutter() -- กวาดล้าง Effect ขยะที่เกิดใหม่
+            end
+        end
+    end
+end))
+
+print("[CLAY-FPS v5.9] ✅ โหลดสำเร็จ! ระบบล้างขยะและ Memory Manager ทำงานแล้ว")
